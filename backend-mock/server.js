@@ -24,7 +24,8 @@ const PORT = process.env.PORT || 8081;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:3000/callback';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || `${FRONTEND_URL}/callback`;
 
 // ============ PERSISTENT TOKEN STORAGE ============
 const TOKENS_FILE = path.join(__dirname, 'tokens.json');
@@ -346,17 +347,17 @@ app.get('/callback', async (req, res) => {
   const { code, error } = req.query;
 
   if (error) {
-    return res.redirect(`http://localhost:3000/?error=${error}`);
+    return res.redirect(`${FRONTEND_URL}/?error=${error}`);
   }
 
   if (!code) {
-    return res.redirect(`http://localhost:3000/?error=no_code`);
+    return res.redirect(`${FRONTEND_URL}/?error=no_code`);
   }
 
   try {
     if (!SPOTIFY_CLIENT_SECRET) {
       console.error('[Callback] Missing SPOTIFY_CLIENT_SECRET env');
-      return res.redirect(`http://localhost:3000/?error=spotify_not_configured`);
+      return res.redirect(`${FRONTEND_URL}/?error=spotify_not_configured`);
     }
     // Exchange authorization code for access token
     const tokenResponse = await axios.post(
@@ -408,10 +409,10 @@ app.get('/callback', async (req, res) => {
     // Set httpOnly refresh cookie so browser will include it on future calls to /api/auth/refresh
     try { setRefreshCookie(res, spotifyRefreshToken); } catch (e) { /* ignore */ }
     // Redirect to frontend with token
-    res.redirect(`http://localhost:3000/?token=${harmonyTrackToken}`);
+    res.redirect(`${FRONTEND_URL}/?token=${harmonyTrackToken}`);
   } catch (error) {
     console.error('Error exchanging code for token:', error.response?.data || error.message);
-    res.redirect(`http://localhost:3000/?error=auth_failed`);
+    res.redirect(`${FRONTEND_URL}/?error=auth_failed`);
   }
 });
 
