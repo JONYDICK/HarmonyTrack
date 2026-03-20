@@ -66,7 +66,7 @@ export default function App() {
       (async () => {
         try {
           console.log('[Auth] Exchanging code for token...');
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+          const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8081').trim();
           const response = await axios.post(`${API_URL}/api/auth/spotify/exchange`, { code }, { timeout: 15000 });
           const { token, warning } = response.data;
           if (token) {
@@ -109,7 +109,7 @@ export default function App() {
       (async () => {
         try {
           console.log('[Auth] Validating existing token...');
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+          const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8081').trim();
           const resp = await axios.post(`${apiUrl}/api/auth/refresh`, {}, {
             headers: { Authorization: `Bearer ${existing}` },
             timeout: 5000

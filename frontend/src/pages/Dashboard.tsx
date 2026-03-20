@@ -349,7 +349,7 @@ const Dashboard: React.FC = () => {
             </button>
             {/* Anchor link to backend redirect endpoint — more reliable than AJAX navigation */}
             <a
-              href={(import.meta.env.VITE_API_URL || 'http://localhost:8081') + '/api/auth/spotify/redirect'}
+              href={(import.meta.env.VITE_API_URL || 'http://localhost:8081').trim() + '/api/auth/spotify/redirect'}
               onClick={() => {
                 try {
                   if (isEnabled) playSound('click');
@@ -357,7 +357,7 @@ const Dashboard: React.FC = () => {
                 } catch (e) {}
                 // Fallback: if navigation doesn't happen (popup blocker / JS prevention), open in new tab after a short delay
                 try {
-                  const href = (import.meta.env.VITE_API_URL || 'http://localhost:8081') + '/api/auth/spotify/redirect';
+                  const href = (import.meta.env.VITE_API_URL || 'http://localhost:8081').trim() + '/api/auth/spotify/redirect';
                   const timer = setTimeout(() => {
                     // If page still loaded (navigation didn't occur), open a new tab
                     try { window.open(href, '_blank'); } catch (e) {}

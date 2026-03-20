@@ -76,7 +76,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, externalError }) => {
         });
       }
       
-      const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:8081'}/api/auth/spotify/login`);
+      const response = await axios.get(`${(import.meta.env.VITE_API_URL || 'http://localhost:8081').trim()}/api/auth/spotify/login`);
       
       if (response.data.authUrl) {
         if (isEnabled) playSound('success');
