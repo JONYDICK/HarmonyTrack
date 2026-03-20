@@ -1,0 +1,33 @@
+{
+  "name": "harmonytrack-backend-mock",
+  "version": "1.0.0",
+  "description": "HarmonyTrack Mock Backend for local development (no Docker required)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "harmonytrack",
+    "mock",
+    "backend",
+    "development"
+  ],
+  "author": "HarmonyTrack Dev",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.5",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.4",
+    "express": "^4.18.2",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.0.0",
+    "cookie-parser": "^1.4.6",
+    "express-async-errors": "^3.1.1",
+    "jsonwebtoken": "^9.0.0",
+    "pg": "^8.11.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

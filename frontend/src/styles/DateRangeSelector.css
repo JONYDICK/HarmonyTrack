@@ -1,0 +1,152 @@
+.date-range-selector {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.selector-header {
+  margin-bottom: 20px;
+}
+
+.selector-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.preset-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.preset-btn {
+  padding: 10px 16px;
+  border: 2px solid #ddd;
+  background: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #666;
+}
+
+.preset-btn:hover {
+  border-color: #1db954;
+  color: #1db954;
+}
+
+.preset-btn.active {
+  background: #1db954;
+  border-color: #1db954;
+  color: white;
+}
+
+.custom-range {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.date-input-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.date-input-group input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.3s ease;
+}
+
+.date-input-group input:focus {
+  outline: none;
+  border-color: #1db954;
+  box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
+}
+
+.apply-custom-btn {
+  padding: 10px 20px;
+  background: #1db954;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.apply-custom-btn:hover:not(:disabled) {
+  background: #1ed760;
+}
+
+.apply-custom-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.date-display {
+  padding: 12px 16px;
+  background: #f0f7f0;
+  border-left: 4px solid #1db954;
+  border-radius: 4px;
+}
+
+.date-display p {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.date-display strong {
+  color: #1db954;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .custom-range {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .date-input-group {
+    width: 100%;
+  }
+
+  .apply-custom-btn {
+    width: 100%;
+  }
+
+  .preset-buttons {
+    gap: 8px;
+  }
+
+  .preset-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
