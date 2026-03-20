@@ -124,7 +124,8 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
     return callback(new Error('CORS not allowed for origin'));
-  }
+  },
+  credentials: true
 }));
 // Limit JSON body size to mitigate large payload injection vectors
 app.use(express.json({ limit: '200kb' }));
@@ -420,7 +421,7 @@ app.get('/callback', async (req, res) => {
 
 // SPA callback: frontend sends the code, backend exchanges it and returns JWT as JSON
 app.post('/api/auth/spotify/exchange', [
-  body('code').isString().isLength({ min: 1, max: 1024 }).trim().escape()
+  body('code').isString().isLength({ min: 1, max: 1024 }).trim()
 ], validationHandler, async (req, res) => {
   const { code } = req.body;
 
