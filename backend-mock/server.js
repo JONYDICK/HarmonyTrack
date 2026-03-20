@@ -117,7 +117,7 @@ db.init().then(() => {
 
 // Middleware
 // Restrict CORS to allowed origins from env (defaults to localhost frontend)
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000').split(',').map(s => s.trim());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000').trim().split(',').map(s => s.trim());
 app.use(cors({
   origin: function(origin, callback) {
     // Allow non-browser tools (no origin) and allowed origins
