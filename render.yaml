@@ -4,36 +4,33 @@ services:
     name: harmonytrack-backend
     runtime: node
     region: oregon
-    plan: free
     buildCommand: cd backend-mock && npm install
     startCommand: cd backend-mock && npm start
-    healthCheckPath: /api/health
     envVars:
       - key: PORT
-        value: 10000
+        value: "10000"
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
-        sync: false  # Set via dashboard
+        sync: false
       - key: SPOTIFY_CLIENT_ID
         sync: false
       - key: SPOTIFY_CLIENT_SECRET
         sync: false
       - key: SPOTIFY_REDIRECT_URI
-        sync: false  # Update after frontend URL is known
+        sync: false
       - key: ENCRYPTION_KEY
         sync: false
       - key: LOG_LEVEL
         value: info
 
-  # Frontend React App (served via serve)
+  # Frontend React App
   - type: web
     name: harmonytrack-frontend
     runtime: node
     region: oregon
-    plan: free
-    buildCommand: cd frontend && npm install && npm run build && npm install -g serve
-    startCommand: serve frontend/dist -s -l $PORT
+    buildCommand: cd frontend && npm install && npm run build && npm install serve
+    startCommand: npx serve frontend/dist -s -l $PORT
     envVars:
       - key: VITE_API_URL
         value: https://harmonytrack-backend.onrender.com
