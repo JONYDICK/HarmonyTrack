@@ -81,7 +81,8 @@ const RecommendationsPage: React.FC = () => {
       setError(null);
       
       const token = localStorage.getItem('harmonytrack_token');
-      const response = await axios.get('http://localhost:8081/api/recommendations', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const response = await axios.get(`${apiUrl}/api/recommendations`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

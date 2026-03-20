@@ -66,7 +66,8 @@ export default function App() {
       (async () => {
         try {
           console.log('[Auth] Exchanging code for token...');
-          const response = await axios.post('http://127.0.0.1:8081/api/auth/spotify/exchange', { code });
+          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+          const response = await axios.post(`${API_URL}/api/auth/spotify/exchange`, { code });
           const { token, warning } = response.data;
           if (token) {
             console.log('[Auth] Token received, storing...', warning ? `(warning: ${warning})` : '');
@@ -106,7 +107,8 @@ export default function App() {
       (async () => {
         try {
           console.log('[Auth] Validating existing token...');
-          const resp = await axios.post('http://127.0.0.1:8081/api/auth/refresh', {}, {
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+          const resp = await axios.post(`${apiUrl}/api/auth/refresh`, {}, {
             headers: { Authorization: `Bearer ${existing}` }
           });
           if (resp.data?.token) {
