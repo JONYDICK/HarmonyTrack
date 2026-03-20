@@ -51,50 +51,26 @@ export default function App() {
 
     if (tokenFromUrl) {
       localStorage.setItem('harmonytrack_token', tokenFromUrl);
+      // Disable demo mode — user has a real Spotify session now
+      localStorage.setItem('harmonytrack_demo', 'false');
+      // Check for warning (e.g. spotify_403)
+      const warning = params.get('warning');
+      if (warning) {
+        localStorage.setItem('harmonytrack_warning', warning);
+      }
       setIsAuthenticated(true);
       window.history.replaceState({}, document.title, '/');
       setIsLoading(false);
       return;
     }
 
-    // Handle Spotify OAuth callback: /callback?code=xxx
-    // Guard against React StrictMode double-firing (codes are single-use)
+    // Handle Spotify OAuth callback: if a code arrives on the frontend,
+    // redirect to the backend callback which handles the exchange server-side.
     if (code && (path === '/callback' || path === '/') && !exchangeInProgress.current) {
       exchangeInProgress.current = true;
-      // Clear code from URL immediately to prevent re-use on refresh
-      window.history.replaceState({}, document.title, '/');
-      (async () => {
-        try {
-          console.log('[Auth] Exchanging code for token...');
-          const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8081').trim();
-          const response = await axios.post(`${API_URL}/api/auth/spotify/exchange`, { code }, { timeout: 15000 });
-          const { token, warning } = response.data;
-          if (token) {
-            console.log('[Auth] Token received, storing...', warning ? `(warning: ${warning})` : '');
-            localStorage.setItem('harmonytrack_token', token);
-            // Disable demo mode — user has a real Spotify session now
-            localStorage.setItem('harmonytrack_demo', 'false');
-            if (warning === 'spotify_403') {
-              localStorage.setItem('harmonytrack_warning', 'spotify_403');
-            }
-            setIsAuthenticated(true);
-          } else {
-            console.error('[Auth] No token in response:', response.data);
-            setAuthError('No token received from server');
-          }
-        } catch (err: any) {
-          const serverError = err.response?.data;
-          console.error('[Auth] Token exchange failed:', err.response?.status, serverError || err.message);
-          if (serverError?.error === 'token_exchange_failed') {
-            setAuthError(serverError.message || 'Spotify rejected the code. Try again.');
-          } else {
-            setAuthError(serverError?.message || 'Failed to authenticate with Spotify');
-          }
-        } finally {
-          setIsLoading(false);
-        }
-      })();
-      return; // Don't call setIsLoading(false) yet — async handler will do it
+      const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8081').trim();
+      window.location.href = `${API_URL}/callback?code=${encodeURIComponent(code)}`;
+      return; // navigating away
     }
 
     // If an exchange is already in progress (StrictMode 2nd run after URL was cleared),

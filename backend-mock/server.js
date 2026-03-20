@@ -350,7 +350,7 @@ app.get('/callback', async (req, res) => {
   const { code, error } = req.query;
 
   if (error) {
-    return res.redirect(`${FRONTEND_URL}/?error=${error}`);
+    return res.redirect(`${FRONTEND_URL}/?error=${encodeURIComponent(error)}`);
   }
 
   if (!code) {
@@ -379,40 +379,55 @@ app.get('/callback', async (req, res) => {
 
     const spotifyAccessToken = tokenResponse.data.access_token;
     const spotifyRefreshToken = tokenResponse.data.refresh_token;
+    const expiresIn = tokenResponse.data.expires_in;
 
-    // Get user profile from Spotify
-    const userResponse = await axios.get('https://api.spotify.com/v1/me', {
-      headers: { 'Authorization': `Bearer ${spotifyAccessToken}` }
-    });
+    // Try to get user profile (may fail with 403 in Dev Mode)
+    let spotifyUser = null;
+    let warning = null;
+    try {
+      const userResponse = await axios.get('https://api.spotify.com/v1/me', {
+        headers: { 'Authorization': `Bearer ${spotifyAccessToken}` }
+      });
+      spotifyUser = userResponse.data;
+    } catch (profileErr) {
+      const status = profileErr.response?.status;
+      console.warn('[Callback] Profile fetch failed:', status, profileErr.response?.data?.error?.message || profileErr.message);
+      if (status === 403) {
+        warning = 'spotify_403';
+      } else {
+        warning = `profile_error_${status || 'unknown'}`;
+      }
+    }
 
-    const spotifyUser = userResponse.data;
-
-    // Create our JWT token
-    const userId = `spotify_${spotifyUser.id}`;
+    // Create JWT token (even without profile data)
+    const uniqueId = spotifyUser?.id || `unknown_${Date.now()}`;
+    const userId = `spotify_${uniqueId}`;
     const harmonyTrackToken = jwt.sign(
       {
         user_id: userId,
-        email: spotifyUser.email,
-        name: spotifyUser.display_name,
-        spotify_id: spotifyUser.id
+        email: spotifyUser?.email || null,
+        name: spotifyUser?.display_name || null,
+        spotify_id: uniqueId
       },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    // Store access token for later use — persist to disk
+    // Store access token for later use
     global.userTokens = global.userTokens || {};
     global.userTokens[userId] = {
       accessToken: spotifyAccessToken,
       refreshToken: spotifyRefreshToken,
-      expiresAt: Date.now() + (tokenResponse.data.expires_in * 1000)
+      expiresAt: Date.now() + (expiresIn * 1000)
     };
     saveTokens();
 
-    // Set httpOnly refresh cookie so browser will include it on future calls to /api/auth/refresh
+    // Set httpOnly refresh cookie
     try { setRefreshCookie(res, spotifyRefreshToken); } catch (e) { /* ignore */ }
-    // Redirect to frontend with token
-    res.redirect(`${FRONTEND_URL}/?token=${harmonyTrackToken}`);
+    // Redirect to frontend with token (and warning if any)
+    let redirectUrl = `${FRONTEND_URL}/?token=${harmonyTrackToken}`;
+    if (warning) redirectUrl += `&warning=${warning}`;
+    res.redirect(redirectUrl);
   } catch (error) {
     console.error('Error exchanging code for token:', error.response?.data || error.message);
     res.redirect(`${FRONTEND_URL}/?error=auth_failed`);
