@@ -57,6 +57,8 @@ function loadTokens() {
 
 function saveTokens() {
   try {
+    // Skip file writes in serverless environments (Vercel)
+    if (process.env.VERCEL) return;
     // Write atomically: write to a .tmp file then rename
     const tmp = TOKENS_FILE + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(global.userTokens, null, 2), { encoding: 'utf-8', mode: 0o600 });
@@ -1317,31 +1319,37 @@ app.use((err, req, res, next) => {
   }
 });
 
-// ============ START SERVER ============
+// ============ START SERVER / EXPORT FOR VERCEL ============
 
-app.listen(PORT, () => {
-  console.log(`\n${'='.repeat(50)}`);
-  console.log('🎵 HarmonyTrack Mock Backend');
-  console.log(`${'='.repeat(50)}`);
-  console.log(`\n✓ Server running on http://localhost:${PORT}`);
-  console.log(`✓ Health check: http://localhost:${PORT}/health`);
-  console.log(`\n📊 Mock Endpoints Available:`);
-  console.log('  POST   /api/auth/spotify');
-  console.log('  GET    /api/auth/callback');
-  console.log('  POST   /api/auth/logout');
-  console.log('  POST   /api/mood');
-  console.log('  GET    /api/mood');
-  console.log('  GET    /api/mood/latest');
-  console.log('  GET    /api/mood/analytics?start=YYYY-MM-DD&end=YYYY-MM-DD');
-  console.log('  GET    /api/mood/trends?period=weekly&count=8');
-  console.log('  GET    /api/mood/insights?days=30');
-  console.log('  GET    /api/recommendations');
-  console.log('  GET    /api/user');
-  console.log('\n🔐 JWT Token for testing:');
+// Export app for Vercel serverless
+module.exports = app;
 
-  const testToken = generateMockJWT('user_123');
-  console.log(`  ${testToken}`);
-  console.log('\n💡 Use this token in Authorization header:');
-  console.log('  Authorization: Bearer [token]');
-  console.log(`\n${'='.repeat(50)}\n`);
-});
+// Only listen when running directly (not imported by Vercel)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`\n${'='.repeat(50)}`);
+    console.log('🎵 HarmonyTrack Mock Backend');
+    console.log(`${'='.repeat(50)}`);
+    console.log(`\n✓ Server running on http://localhost:${PORT}`);
+    console.log(`✓ Health check: http://localhost:${PORT}/health`);
+    console.log(`\n📊 Mock Endpoints Available:`);
+    console.log('  POST   /api/auth/spotify');
+    console.log('  GET    /api/auth/callback');
+    console.log('  POST   /api/auth/logout');
+    console.log('  POST   /api/mood');
+    console.log('  GET    /api/mood');
+    console.log('  GET    /api/mood/latest');
+    console.log('  GET    /api/mood/analytics?start=YYYY-MM-DD&end=YYYY-MM-DD');
+    console.log('  GET    /api/mood/trends?period=weekly&count=8');
+    console.log('  GET    /api/mood/insights?days=30');
+    console.log('  GET    /api/recommendations');
+    console.log('  GET    /api/user');
+    console.log('\n🔐 JWT Token for testing:');
+
+    const testToken = generateMockJWT('user_123');
+    console.log(`  ${testToken}`);
+    console.log('\n💡 Use this token in Authorization header:');
+    console.log('  Authorization: Bearer [token]');
+    console.log(`\n${'='.repeat(50)}\n`);
+  });
+}
