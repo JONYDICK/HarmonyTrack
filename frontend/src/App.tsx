@@ -12,7 +12,7 @@ export default function App() {
   const exchangeInProgress = React.useRef(false);
 
   React.useEffect(() => {
-    // Enable demo mode by default if not explicitly disabled
+    // Enable demo mode by default only if user hasn't explicitly set it
     try {
       const demoOverride = localStorage.getItem('harmonytrack_demo');
       if (demoOverride === null && import.meta.env.VITE_DEMO !== 'false') {
@@ -67,11 +67,13 @@ export default function App() {
         try {
           console.log('[Auth] Exchanging code for token...');
           const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
-          const response = await axios.post(`${API_URL}/api/auth/spotify/exchange`, { code });
+          const response = await axios.post(`${API_URL}/api/auth/spotify/exchange`, { code }, { timeout: 15000 });
           const { token, warning } = response.data;
           if (token) {
             console.log('[Auth] Token received, storing...', warning ? `(warning: ${warning})` : '');
             localStorage.setItem('harmonytrack_token', token);
+            // Disable demo mode — user has a real Spotify session now
+            localStorage.setItem('harmonytrack_demo', 'false');
             if (warning === 'spotify_403') {
               localStorage.setItem('harmonytrack_warning', 'spotify_403');
             }
