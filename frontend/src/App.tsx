@@ -103,13 +103,14 @@ export default function App() {
 
     // If we have a token in localStorage (non-demo), try to validate/refresh it with backend
     const existing = localStorage.getItem('harmonytrack_token');
-    if (existing) {
+    if (existing && !isDemoMode()) {
       (async () => {
         try {
           console.log('[Auth] Validating existing token...');
           const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
           const resp = await axios.post(`${apiUrl}/api/auth/refresh`, {}, {
-            headers: { Authorization: `Bearer ${existing}` }
+            headers: { Authorization: `Bearer ${existing}` },
+            timeout: 5000
           });
           if (resp.data?.token) {
             localStorage.setItem('harmonytrack_token', resp.data.token);
@@ -129,6 +130,11 @@ export default function App() {
         }
       })();
       return;
+    }
+
+    // In demo mode with no real token, go straight to dashboard
+    if (isDemoMode()) {
+      setIsAuthenticated(true);
     }
 
     setIsLoading(false);
