@@ -21,11 +21,11 @@ const { body, query, param, validationResult } = require('express-validator');
 
 const app = express();
 const PORT = process.env.PORT || 8081;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
-const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || `${FRONTEND_URL}/callback`;
+const JWT_SECRET = (process.env.JWT_SECRET || 'dev_jwt_secret').trim();
+const SPOTIFY_CLIENT_ID = (process.env.SPOTIFY_CLIENT_ID || '').trim();
+const SPOTIFY_CLIENT_SECRET = (process.env.SPOTIFY_CLIENT_SECRET || '').trim();
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:3000').trim();
+const SPOTIFY_REDIRECT_URI = (process.env.SPOTIFY_REDIRECT_URI || `${FRONTEND_URL}/callback`).trim();
 
 // ============ PERSISTENT TOKEN STORAGE ============
 const TOKENS_FILE = path.join(__dirname, 'tokens.json');
