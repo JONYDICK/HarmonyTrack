@@ -99,8 +99,20 @@ async function refreshSpotifyAccessToken(userId) {
 }
 
 // Helper: get valid access token, try refresh if expired
-async function getAccessTokenForUser(userId) {
-  const stored = global.userTokens[userId];
+// Falls back to JWT-embedded tokens when global.userTokens is empty (serverless)
+async function getAccessTokenForUser(userId, req) {
+  let stored = global.userTokens[userId];
+  // Fallback: if no stored tokens in memory, use tokens from JWT payload
+  if (!stored && req && req.spotifyAccessToken) {
+    stored = {
+      accessToken: req.spotifyAccessToken,
+      refreshToken: req.spotifyRefreshToken,
+      expiresAt: req.spotifyTokenExpires || 0
+    };
+    // Re-hydrate global cache for this invocation
+    global.userTokens = global.userTokens || {};
+    global.userTokens[userId] = stored;
+  }
   if (!stored) return null;
   if (stored.expiresAt && Date.now() < stored.expiresAt - 5000) return stored.accessToken;
   // expired or near-expiry -> refresh
@@ -286,6 +298,12 @@ function verifyJWT(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.user_id;
+    // Pass Spotify tokens from JWT for serverless environments
+    if (decoded.spotify_access_token) {
+      req.spotifyAccessToken = decoded.spotify_access_token;
+      req.spotifyRefreshToken = decoded.spotify_refresh_token;
+      req.spotifyTokenExpires = decoded.spotify_token_expires;
+    }
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -402,12 +420,16 @@ app.get('/callback', async (req, res) => {
     // Create JWT token (even without profile data)
     const uniqueId = spotifyUser?.id || `unknown_${Date.now()}`;
     const userId = `spotify_${uniqueId}`;
+    const tokenExpiresAt = Date.now() + (expiresIn * 1000);
     const harmonyTrackToken = jwt.sign(
       {
         user_id: userId,
         email: spotifyUser?.email || null,
         name: spotifyUser?.display_name || null,
-        spotify_id: uniqueId
+        spotify_id: uniqueId,
+        spotify_access_token: spotifyAccessToken,
+        spotify_refresh_token: spotifyRefreshToken,
+        spotify_token_expires: tokenExpiresAt
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -418,7 +440,7 @@ app.get('/callback', async (req, res) => {
     global.userTokens[userId] = {
       accessToken: spotifyAccessToken,
       refreshToken: spotifyRefreshToken,
-      expiresAt: Date.now() + (expiresIn * 1000)
+      expiresAt: tokenExpiresAt
     };
     saveTokens();
 
@@ -506,12 +528,16 @@ app.post('/api/auth/spotify/exchange', [
   // Step 3: Create JWT (even without profile data)
   const uniqueId = spotifyUser?.id || `unknown_${Date.now()}`;
   const userId = `spotify_${uniqueId}`;
+  const tokenExpiresAt = Date.now() + (expiresIn * 1000);
   const harmonyTrackToken = jwt.sign(
     {
       user_id: userId,
       email: spotifyUser?.email || null,
       name: spotifyUser?.display_name || null,
-      spotify_id: uniqueId
+      spotify_id: uniqueId,
+      spotify_access_token: spotifyAccessToken,
+      spotify_refresh_token: spotifyRefreshToken,
+      spotify_token_expires: tokenExpiresAt
     },
     JWT_SECRET,
     { expiresIn: '24h' }
@@ -1082,7 +1108,7 @@ app.get('/api/spotify/profile', verifyJWT, async (req, res) => {
   try {
     // Prefer live Spotify data if we have stored tokens for this user
     const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId);
+    const accessToken = await getAccessTokenForUser(userId, req);
     if (accessToken) {
       try {
         const r = await axios.get('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -1119,7 +1145,7 @@ app.get('/api/spotify/top-tracks', verifyJWT, [
   const { time_range = 'short_term', limit = 20 } = req.query;
   try {
     const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId);
+    const accessToken = await getAccessTokenForUser(userId, req);
     if (accessToken) {
       try {
         const r = await axios.get('https://api.spotify.com/v1/me/top/tracks', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
@@ -1160,7 +1186,7 @@ app.get('/api/spotify/top-artists', verifyJWT, [
   const { time_range = 'medium_term', limit = 20 } = req.query;
   try {
     const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId);
+    const accessToken = await getAccessTokenForUser(userId, req);
     if (accessToken) {
       try {
         const r = await axios.get('https://api.spotify.com/v1/me/top/artists', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
@@ -1200,7 +1226,7 @@ app.get('/api/spotify/recently-played', verifyJWT, [
   const { limit = 50 } = req.query;
   try {
     const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId);
+    const accessToken = await getAccessTokenForUser(userId, req);
     if (accessToken) {
       try {
         const r = await axios.get('https://api.spotify.com/v1/me/player/recently-played', { headers: { Authorization: `Bearer ${accessToken}` }, params: { limit } });
@@ -1236,7 +1262,7 @@ app.get('/api/spotify/audio-features', verifyJWT, [
   const { ids } = req.query;
   try {
     const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId);
+    const accessToken = await getAccessTokenForUser(userId, req);
     if (accessToken) {
       try {
         const r = await axios.get('https://api.spotify.com/v1/audio-features', { headers: { Authorization: `Bearer ${accessToken}` }, params: { ids } });
