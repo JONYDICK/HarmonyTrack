@@ -1106,35 +1106,16 @@ async function spotifyAPI(spotifyToken, url) {
 
 app.get('/api/spotify/profile', verifyJWT, async (req, res) => {
   try {
-    // Prefer live Spotify data if we have stored tokens for this user
     const userId = req.userId;
     const accessToken = await getAccessTokenForUser(userId, req);
-    if (accessToken) {
-      try {
-        const r = await axios.get('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${accessToken}` } });
-        return res.json(r.data);
-      } catch (err) {
-        console.warn('[Profile] Live Spotify call failed, falling back to mock:', err.response?.status || err.message);
-      }
+    if (!accessToken) {
+      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
     }
-
-    // Fallback: demo profile
-    const mockProfile = {
-      id: 'spotify_user_123',
-      display_name: 'Demo User',
-      email: 'demo@harmonytrack.local',
-      external_urls: { spotify: 'https://open.spotify.com/user/demo' },
-      followers: { href: null, total: 42 },
-      href: 'https://api.spotify.com/v1/users/demo',
-      images: [{ height: 64, url: 'https://platform.spotify.com/images/open-graph/icon.png', width: 64 }],
-      product: 'premium',
-      type: 'user',
-      uri: 'spotify:user:demo'
-    };
-    res.json(mockProfile);
+    const data = await spotifyAPI(accessToken, 'https://api.spotify.com/v1/me');
+    return res.json(data);
   } catch (e) {
     console.error('Profile error:', e.message);
-    res.status(500).json({ error: 'Failed to fetch profile' });
+    res.status(e.status || 500).json({ error: 'Failed to fetch profile', spotifyError: e.spotifyMessage || null });
   }
 });
 
@@ -1146,36 +1127,15 @@ app.get('/api/spotify/top-tracks', verifyJWT, [
   try {
     const userId = req.userId;
     const accessToken = await getAccessTokenForUser(userId, req);
-    if (accessToken) {
-      try {
-        const r = await axios.get('https://api.spotify.com/v1/me/top/tracks', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
-        return res.json(r.data);
-      } catch (err) {
-        console.warn('[TopTracks] Live Spotify call failed, falling back to mock:', err.response?.status || err.message);
-      }
+    if (!accessToken) {
+      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
     }
-
-    // Fallback mock data for presentation
-    const mockTracks = {
-      items: [
-        { id: '1', name: 'Blinding Lights', artists: [{ name: 'The Weeknd' }], popularity: 95, duration_ms: 200040, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Blinding+Lights', height: 300, width: 300 }] } },
-        { id: '2', name: 'Shape of You', artists: [{ name: 'Ed Sheeran' }], popularity: 93, duration_ms: 235960, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Shape+of+You', height: 300, width: 300 }] } },
-        { id: '3', name: 'One Dance', artists: [{ name: 'Drake', }, { name: 'Wizkid' }], popularity: 91, duration_ms: 173600, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=One+Dance', height: 300, width: 300 }] } },
-        { id: '4', name: 'Levitating', artists: [{ name: 'Dua Lipa' }], popularity: 89, duration_ms: 203411, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Levitating', height: 300, width: 300 }] } },
-        { id: '5', name: 'Anti-Hero', artists: [{ name: 'Taylor Swift' }], popularity: 92, duration_ms: 228973, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Anti-Hero', height: 300, width: 300 }] } },
-        { id: '6', name: 'Heat Waves', artists: [{ name: 'Glass Animals' }], popularity: 88, duration_ms: 239626, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Heat+Waves', height: 300, width: 300 }] } },
-        { id: '7', name: 'Watermelon Sugar', artists: [{ name: 'Harry Styles' }], popularity: 87, duration_ms: 174373, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Watermelon+Sugar', height: 300, width: 300 }] } },
-        { id: '8', name: 'Good 4 U', artists: [{ name: 'Olivia Rodrigo' }], popularity: 86, duration_ms: 178556, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Good+4U', height: 300, width: 300 }] } },
-        { id: '9', name: 'Industry Baby', artists: [{ name: 'Lil Nas X' }, { name: 'Jack Harlow' }], popularity: 85, duration_ms: 208826, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Industry+Baby', height: 300, width: 300 }] } },
-        { id: '10', name: 'As It Was', artists: [{ name: 'Harry Styles' }], popularity: 94, duration_ms: 174000, album: { images: [{ url: 'https://via.placeholder.com/300x300?text=As+It+Was', height: 300, width: 300 }] } }
-      ],
-      total: 10,
-      limit: parseInt(limit) || 20
-    };
-    res.json(mockTracks);
+    const r = await axios.get('https://api.spotify.com/v1/me/top/tracks', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
+    return res.json(r.data);
   } catch (e) {
     console.error('Spotify top tracks error:', e.message);
-    res.status(500).json({ error: 'Failed to fetch top tracks' });
+    const status = e.response?.status || e.status || 500;
+    res.status(status).json({ error: 'Failed to fetch top tracks', spotifyError: e.response?.data?.error?.message || e.spotifyMessage || null });
   }
 });
 
@@ -1187,36 +1147,15 @@ app.get('/api/spotify/top-artists', verifyJWT, [
   try {
     const userId = req.userId;
     const accessToken = await getAccessTokenForUser(userId, req);
-    if (accessToken) {
-      try {
-        const r = await axios.get('https://api.spotify.com/v1/me/top/artists', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
-        return res.json(r.data);
-      } catch (err) {
-        console.warn('[TopArtists] Live Spotify call failed, falling back to mock:', err.response?.status || err.message);
-      }
+    if (!accessToken) {
+      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
     }
-
-    // Fallback mock data for artists
-    const mockArtists = {
-      items: [
-        { id: 'a1', name: 'The Weeknd', popularity: 95, genres: ['pop', 'hip-hop'] },
-        { id: 'a2', name: 'Taylor Swift', popularity: 92, genres: ['pop', 'singer-songwriter'] },
-        { id: 'a3', name: 'Drake', popularity: 90, genres: ['hip-hop', 'rap', 'pop'] },
-        { id: 'a4', name: 'Harry Styles', popularity: 88, genres: ['pop', 'rock'] },
-        { id: 'a5', name: 'Ed Sheeran', popularity: 91, genres: ['pop', 'singer-songwriter'] },
-        { id: 'a6', name: 'Dua Lipa', popularity: 89, genres: ['pop', 'dance-pop'] },
-        { id: 'a7', name: 'Ariana Grande', popularity: 87, genres: ['pop', 'pop-rap'] },
-        { id: 'a8', name: 'The Beatles', popularity: 94, genres: ['rock', 'pop'] },
-        { id: 'a9', name: 'David Bowie', popularity: 93, genres: ['rock', 'pop-rock'] },
-        { id: 'a10', name: 'Pink Floyd', popularity: 85, genres: ['rock', 'progressive rock'] }
-      ],
-      total: 10,
-      limit: parseInt(limit) || 20
-    };
-    res.json(mockArtists);
+    const r = await axios.get('https://api.spotify.com/v1/me/top/artists', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
+    return res.json(r.data);
   } catch (e) {
     console.error('Spotify top artists error:', e.message);
-    res.status(500).json({ error: 'Failed to fetch top artists' });
+    const status = e.response?.status || e.status || 500;
+    res.status(status).json({ error: 'Failed to fetch top artists', spotifyError: e.response?.data?.error?.message || e.spotifyMessage || null });
   }
 });
 
@@ -1227,32 +1166,15 @@ app.get('/api/spotify/recently-played', verifyJWT, [
   try {
     const userId = req.userId;
     const accessToken = await getAccessTokenForUser(userId, req);
-    if (accessToken) {
-      try {
-        const r = await axios.get('https://api.spotify.com/v1/me/player/recently-played', { headers: { Authorization: `Bearer ${accessToken}` }, params: { limit } });
-        return res.json(r.data);
-      } catch (err) {
-        console.warn('[RecentlyPlayed] Live Spotify call failed, falling back to mock:', err.response?.status || err.message);
-      }
+    if (!accessToken) {
+      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
     }
-
-    // Fallback mock recently played
-    const mockRecentlyPlayed = {
-      href: 'https://api.spotify.com/v1/me/player/recently-played',
-      items: [
-        { track: { id: '1', name: 'Blinding Lights', artists: [{ name: 'The Weeknd' }], album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Blinding+Lights', height: 300, width: 300 }] } }, played_at: '2026-02-20T12:0:00Z' },
-        { track: { id: '2', name: 'Shape of You', artists: [{ name: 'Ed Sheeran' }], album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Shape+of+You', height: 300, width: 300 }] } }, played_at: '2026-02-20T11:45:00Z' },
-        { track: { id: '3', name: 'Levitating', artists: [{ name: 'Dua Lipa' }], album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Levitating', height: 300, width: 300 }] } }, played_at: '2026-02-20T11:30:00Z' },
-        { track: { id: '4', name: 'Heat Waves', artists: [{ name: 'Glass Animals' }], album: { images: [{ url: 'https://via.placeholder.com/300x300?text=Heat+Waves', height: 300, width: 300 }] } }, played_at: '2026-02-20T11:15:00Z' },
-        { track: { id: '5', name: 'As It Was', artists: [{ name: 'Harry Styles' }], album: { images: [{ url: 'https://via.placeholder.com/300x300?text=As+It+Was', height: 300, width: 300 }] } }, played_at: '2026-02-20T11:00:00Z' }
-      ],
-      limit: parseInt(limit) || 50,
-      total: 5
-    };
-    res.json(mockRecentlyPlayed);
+    const r = await axios.get('https://api.spotify.com/v1/me/player/recently-played', { headers: { Authorization: `Bearer ${accessToken}` }, params: { limit } });
+    return res.json(r.data);
   } catch (e) {
     console.error('Recently played error:', e.message);
-    res.status(e.response?.status || 500).json({ error: 'Failed to fetch recently played', spotifyError: e.response?.data?.error?.message || null, status: e.response?.status });
+    const status = e.response?.status || e.status || 500;
+    res.status(status).json({ error: 'Failed to fetch recently played', spotifyError: e.response?.data?.error?.message || e.spotifyMessage || null });
   }
 });
 
@@ -1263,29 +1185,15 @@ app.get('/api/spotify/audio-features', verifyJWT, [
   try {
     const userId = req.userId;
     const accessToken = await getAccessTokenForUser(userId, req);
-    if (accessToken) {
-      try {
-        const r = await axios.get('https://api.spotify.com/v1/audio-features', { headers: { Authorization: `Bearer ${accessToken}` }, params: { ids } });
-        return res.json(r.data);
-      } catch (err) {
-        console.warn('[AudioFeatures] Live Spotify call failed, falling back to mock:', err.response?.status || err.message);
-      }
+    if (!accessToken) {
+      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
     }
-
-    // Fallback mock audio features
-    const mockAudioFeatures = {
-      audio_features: [
-        { id: '1', energy: 0.75, danceability: 0.65, valence: 0.72, acousticness: 0.1, instrumentalness: 0.02 },
-        { id: '2', energy: 0.68, danceability: 0.72, valence: 0.68, acousticness: 0.15, instrumentalness: 0.01 },
-        { id: '3', energy: 0.82, danceability: 0.78, valence: 0.75, acousticness: 0.05, instrumentalness: 0.0 },
-        { id: '4', energy: 0.71, danceability: 0.81, valence: 0.82, acousticness: 0.12, instrumentalness: 0.03 },
-        { id: '5', energy: 0.64, danceability: 0.59, valence: 0.71, acousticness: 0.22, instrumentalness: 0.04 }
-      ]
-    };
-    res.json(mockAudioFeatures);
+    const r = await axios.get('https://api.spotify.com/v1/audio-features', { headers: { Authorization: `Bearer ${accessToken}` }, params: { ids } });
+    return res.json(r.data);
   } catch (e) {
     console.error('Spotify audio features error:', e.message);
-    res.status(500).json({ error: 'Failed to fetch audio features' });
+    const status = e.response?.status || e.status || 500;
+    res.status(status).json({ error: 'Failed to fetch audio features', spotifyError: e.response?.data?.error?.message || e.spotifyMessage || null });
   }
 });
 

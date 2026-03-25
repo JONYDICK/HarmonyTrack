@@ -7,16 +7,7 @@ import { VolumeControl } from '../components/VolumeControl';
 import { useAudioFeedback } from '../hooks/useAudioFeedback';
 import { DURATION } from '../animations/config';
 import { spotifyService } from '../services/api';
-import {
-  isDemoMode,
-  mockProfile,
-  mockTopTracks,
-  mockTopTracksLong,
-  mockTopArtists,
-  mockRecentlyPlayed,
-  mockAudioFeatures,
-  mockMoodData,
-} from '../data/mockSpotifyData';
+
 
 // ── Types ──────────────────────────────────────────────
 interface SpotifyImage { url: string; width?: number; height?: number; }
@@ -87,31 +78,16 @@ const Dashboard: React.FC = () => {
   const [audioFeatures, setAudioFeatures] = useState<AudioFeature[]>([]);
   const [moodData, setMoodData] = useState<MoodData>({ happiness: 0.5, energy: 0.5, calmness: 0.5, danceability: 0.5 });
   const [activeTab, setActiveTab] = useState<'overview' | 'evolution' | 'patterns'>('overview');
-  const [demoMode, setDemoMode] = useState<boolean>(() => isDemoMode());
 
   const { playSound, isEnabled } = useAudioFeedback();
 
-  // ── Fetch ALL Spotify data (or use mock data in demo mode) ─────
+  // ── Fetch ALL Spotify data ─────
   useEffect(() => {
     // Load cached profile from localStorage if present (helps when switching modes)
     try {
       const cached = localStorage.getItem('harmonytrack_profile');
       if (cached) setProfile(JSON.parse(cached));
     } catch (e) { /* ignore */ }
-
-    // Demo mode: use mock data, no API calls
-    if (demoMode) {
-      console.log('[Demo Mode] Using mock Spotify data');
-      setProfile(mockProfile as any);
-      setTopTracks(mockTopTracks as any);
-      setTopTracksLong(mockTopTracksLong as any);
-      setTopArtists(mockTopArtists as any);
-      setRecentlyPlayed(mockRecentlyPlayed as any);
-      setAudioFeatures(mockAudioFeatures as any);
-      setMoodData(mockMoodData);
-      setLoading(false);
-      return;
-    }
 
     // Check if auth completed with a 403 warning (Spotify Dev Mode issue)
     const authWarning = localStorage.getItem('harmonytrack_warning');
@@ -193,20 +169,14 @@ const Dashboard: React.FC = () => {
 
         const allFailed = [profileRes, topShortRes, recentRes].every(r => r.status === 'rejected');
         if (allFailed) {
-          console.warn('[Dashboard] All Spotify API calls failed, falling back to mock data');
-          // Fallback to mock data when all API calls fail
-          setProfile(mockProfile as any);
-          setTopTracks(mockTopTracks as any);
-          setTopTracksLong(mockTopTracksLong as any);
-          setTopArtists(mockTopArtists as any);
-          setRecentlyPlayed(mockRecentlyPlayed as any);
-          setAudioFeatures(mockAudioFeatures as any);
-          setMoodData(mockMoodData);
+          console.warn('[Dashboard] All Spotify API calls failed');
           const firstRejected = [profileRes, topShortRes, recentRes].find(r => r.status === 'rejected');
           const resStatus = firstRejected?.status === 'rejected' ? firstRejected.reason?.response?.status : null;
           const spotifyMsg = firstRejected?.status === 'rejected' ? firstRejected.reason?.response?.data?.spotifyError : null;
           if (resStatus === 403) {
-            setError(`Spotify rejected the request (403). ${spotifyMsg || 'Your account may not be registered in the app. Go to developer.spotify.com/dashboard \u2192 your app \u2192 Settings \u2192 User Management and add your Spotify email.'}`);
+            setError(`Spotify rejected the request (403). ${spotifyMsg || 'Your account may not be registered in the app. Go to developer.spotify.com/dashboard, your app, Settings, User Management and add your Spotify email.'}`);
+          } else if (resStatus === 401) {
+            setError('Your Spotify session has expired. Please log out and log in again.');
           } else {
             setError('Could not load Spotify data. Try logging out and reconnecting.');
           }
@@ -217,7 +187,7 @@ const Dashboard: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [demoMode]);
+  }, []);
 
   // Entrance animations
   useEffect(() => {
@@ -334,19 +304,6 @@ const Dashboard: React.FC = () => {
           </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <VolumeControl showLabel={false} orientation="horizontal" />
-            {/* Demo / Live toggle */}
-            <button onClick={() => {
-                const newVal = !demoMode;
-                try { localStorage.setItem('harmonytrack_demo', newVal ? 'true' : 'false'); } catch (e) {}
-                setDemoMode(newVal);
-                // If switching to Live and no token, redirect to root for login
-                if (!newVal && !localStorage.getItem('harmonytrack_token')) {
-                  window.location.href = '/';
-                }
-              }}
-              style={{ background: demoMode ? 'rgba(155,143,255,0.15)' : 'transparent', color: demoMode ? '#9B8FFF' : '#999', border: '1px solid rgba(255,255,255,0.06)', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
-              {demoMode ? 'Demo' : 'Live'}
-            </button>
             {/* Anchor link to backend redirect endpoint — more reliable than AJAX navigation */}
             <a
               href={(import.meta.env.VITE_API_URL || 'http://localhost:8081').trim() + '/api/auth/spotify/redirect'}

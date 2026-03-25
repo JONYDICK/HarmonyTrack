@@ -3,7 +3,6 @@ import axios from 'axios';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import { PerformanceHUD } from './components/PerformanceHUD';
-import { isDemoMode } from './data/mockSpotifyData';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
@@ -12,16 +11,6 @@ export default function App() {
   const exchangeInProgress = React.useRef(false);
 
   React.useEffect(() => {
-    // Enable demo mode by default only if user hasn't explicitly set it
-    try {
-      const demoOverride = localStorage.getItem('harmonytrack_demo');
-      if (demoOverride === null && import.meta.env.VITE_DEMO !== 'false') {
-        localStorage.setItem('harmonytrack_demo', 'true');
-      }
-    } catch (e) {
-      // ignore localStorage errors
-    }
-
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get('token');
     const error = params.get('error');
@@ -51,8 +40,6 @@ export default function App() {
 
     if (tokenFromUrl) {
       localStorage.setItem('harmonytrack_token', tokenFromUrl);
-      // Disable demo mode — user has a real Spotify session now
-      localStorage.setItem('harmonytrack_demo', 'false');
       // Check for warning (e.g. spotify_403)
       const warning = params.get('warning');
       if (warning) {
@@ -79,9 +66,9 @@ export default function App() {
       return;
     }
 
-    // If we have a token in localStorage (non-demo), try to validate/refresh it with backend
+    // If we have a token in localStorage, try to validate/refresh it with backend
     const existing = localStorage.getItem('harmonytrack_token');
-    if (existing && !isDemoMode()) {
+    if (existing) {
       (async () => {
         try {
           console.log('[Auth] Validating existing token...');
@@ -108,11 +95,6 @@ export default function App() {
         }
       })();
       return;
-    }
-
-    // In demo mode with no real token, go straight to dashboard
-    if (isDemoMode()) {
-      setIsAuthenticated(true);
     }
 
     setIsLoading(false);
@@ -157,7 +139,7 @@ export default function App() {
       {/* Performance monitoring HUD (dev only) */}
       <PerformanceHUD position="top-right" />
       
-      {(isAuthenticated || isDemoMode()) ? (
+      {isAuthenticated ? (
         <Dashboard />
       ) : (
         <Login onLoginSuccess={handleLoginSuccess} externalError={authError} />
