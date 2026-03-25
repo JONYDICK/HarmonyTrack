@@ -107,21 +107,34 @@ const Dashboard: React.FC = () => {
 
         if (profileRes.status === 'fulfilled') {
           setProfile(profileRes.value.data);
-          try { localStorage.setItem('harmonytrack_profile', JSON.stringify(profileRes.value.data)); } catch (e) { /* ignore */ }
+        } else {
+          console.warn('[Dashboard] Profile failed:', profileRes.reason?.message);
         }
 
         let shortTracks: SpotifyTrack[] = [];
         if (topShortRes.status === 'fulfilled') {
           shortTracks = topShortRes.value.data.items || [];
           setTopTracks(shortTracks);
+        } else {
+          console.warn('[Dashboard] Top tracks (short) failed:', topShortRes.reason?.message);
         }
-        if (topLongRes.status === 'fulfilled') setTopTracksLong(topLongRes.value.data.items || []);
-        if (artistsRes.status === 'fulfilled') setTopArtists(artistsRes.value.data.items || []);
+        if (topLongRes.status === 'fulfilled') {
+          setTopTracksLong(topLongRes.value.data.items || []);
+        } else {
+          console.warn('[Dashboard] Top tracks (long) failed:', topLongRes.reason?.message);
+        }
+        if (artistsRes.status === 'fulfilled') {
+          setTopArtists(artistsRes.value.data.items || []);
+        } else {
+          console.warn('[Dashboard] Top artists failed:', artistsRes.reason?.message);
+        }
 
         let recentItems: RecentItem[] = [];
         if (recentRes.status === 'fulfilled') {
           recentItems = recentRes.value.data.items || [];
           setRecentlyPlayed(recentItems);
+        } else {
+          console.warn('[Dashboard] Recently played failed:', recentRes.reason?.message);
         }
 
         // Diagnostics: identify tracks missing album/images to explain render crash
@@ -560,7 +573,7 @@ const Dashboard: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {newDiscoveries.slice(0, 8).map((track) => (
                   <div key={track.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 10px', borderRadius: '10px' }}>
-                    {track.album.images?.[0] && <img src={track.album.images[track.album.images.length - 1]?.url || track.album.images[0].url} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px' }} />}
+                    {pickImageUrlFromArray(track.album?.images) && <img src={pickImageUrlFromArray(track.album?.images)!} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px' }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, color: '#fff', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</p>
                       <p style={{ margin: 0, color: '#666', fontSize: '11px' }}>{track.artists.map(a => a.name).join(', ')}</p>
@@ -582,7 +595,7 @@ const Dashboard: React.FC = () => {
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                     <span style={{ color: '#555', fontSize: '12px', width: '18px', textAlign: 'right', fontWeight: 600 }}>{i + 1}</span>
-                    {track.album.images?.[0] && <img src={track.album.images[track.album.images.length - 1]?.url || track.album.images[0].url} alt="" style={{ width: '40px', height: '40px', borderRadius: '6px' }} />}
+                    {pickImageUrlFromArray(track.album?.images) && <img src={pickImageUrlFromArray(track.album?.images)!} alt="" style={{ width: '40px', height: '40px', borderRadius: '6px' }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, color: '#fff', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</p>
                       <p style={{ margin: 0, color: '#666', fontSize: '11px' }}>{track.artists.map(a => a.name).join(', ')}</p>
@@ -691,7 +704,7 @@ const Dashboard: React.FC = () => {
                   if (repeated.length === 0) return <p style={{ color: '#555', fontSize: '13px', textAlign: 'center', padding: '20px 0', gridColumn: '1 / -1' }}>No repeated tracks — great variety!</p>;
                   return repeated.map(({ track, count }) => (
                     <div key={track.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px' }}>
-                      {track.album.images?.[0] && <img src={track.album.images[track.album.images.length - 1]?.url || track.album.images[0].url} alt="" style={{ width: '40px', height: '40px', borderRadius: '6px' }} />}
+                      {pickImageUrlFromArray(track.album?.images) && <img src={pickImageUrlFromArray(track.album?.images)!} alt="" style={{ width: '40px', height: '40px', borderRadius: '6px' }} />}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ margin: 0, color: '#fff', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</p>
                         <p style={{ margin: 0, color: '#666', fontSize: '11px' }}>{track.artists.map(a => a.name).join(', ')}</p>
