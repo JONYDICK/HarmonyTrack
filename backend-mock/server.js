@@ -100,6 +100,9 @@ async function refreshSpotifyAccessToken(userId) {
 
 // Helper: get valid access token, try refresh if expired
 // Falls back to JWT-embedded tokens when global.userTokens is empty (serverless)
+// Uses per-user locking to prevent parallel refresh storms on Vercel
+const refreshLocks = {};
+
 async function getAccessTokenForUser(userId, req) {
   let stored = global.userTokens[userId];
   // Fallback: if no stored tokens in memory, use tokens from JWT payload
@@ -114,10 +117,40 @@ async function getAccessTokenForUser(userId, req) {
     global.userTokens[userId] = stored;
   }
   if (!stored) return null;
-  if (stored.expiresAt && Date.now() < stored.expiresAt - 5000) return stored.accessToken;
-  // expired or near-expiry -> refresh
-  const newTok = await refreshSpotifyAccessToken(userId);
-  return newTok || stored.accessToken;
+  // Token still valid (with 60s buffer)
+  if (stored.expiresAt && Date.now() < stored.expiresAt - 60000) return stored.accessToken;
+  // expired or near-expiry -> refresh with per-user lock
+  if (!refreshLocks[userId]) {
+    refreshLocks[userId] = refreshSpotifyAccessToken(userId)
+      .finally(() => { delete refreshLocks[userId]; });
+  }
+  const newTok = await refreshLocks[userId];
+  return newTok || null;
+}
+
+// Wrapper: call Spotify API with automatic retry on 401 (expired token)
+async function callSpotifyWithRetry(userId, req, spotifyCall) {
+  let accessToken = await getAccessTokenForUser(userId, req);
+  if (!accessToken) {
+    const err = new Error('No Spotify access token available. Please log in again.');
+    err.status = 401;
+    throw err;
+  }
+  try {
+    return await spotifyCall(accessToken);
+  } catch (err) {
+    if (err.response?.status === 401) {
+      console.log(`[Spotify] 401 on API call, forcing token refresh for ${userId}`);
+      const stored = global.userTokens[userId];
+      if (stored) stored.expiresAt = 0;
+      delete refreshLocks[userId];
+      const newToken = await getAccessTokenForUser(userId, req);
+      if (newToken && newToken !== accessToken) {
+        return await spotifyCall(newToken);
+      }
+    }
+    throw err;
+  }
 }
 
 // Initialize DB (if configured)
@@ -674,13 +707,16 @@ app.post('/api/auth/refresh', async (req, res) => {
     // Rotate refresh cookie if Spotify provided a new one
     try { setRefreshCookie(res, newRefreshToken); } catch (e) { /* ignore cookie set errors */ }
 
-    // Issue a new JWT with updated tokens
+    // Issue a new JWT with updated Spotify tokens embedded (critical for serverless)
     const newJwt = jwt.sign(
       {
         user_id: userId,
         email: decoded.email,
         name: decoded.name,
-        spotify_id: decoded.spotify_id
+        spotify_id: decoded.spotify_id,
+        spotify_access_token: newAccessToken,
+        spotify_refresh_token: newRefreshToken,
+        spotify_token_expires: expiresAt
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -1106,16 +1142,14 @@ async function spotifyAPI(spotifyToken, url) {
 
 app.get('/api/spotify/profile', verifyJWT, async (req, res) => {
   try {
-    const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId, req);
-    if (!accessToken) {
-      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
-    }
-    const data = await spotifyAPI(accessToken, 'https://api.spotify.com/v1/me');
-    return res.json(data);
+    const result = await callSpotifyWithRetry(req.userId, req, (token) =>
+      axios.get('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${token}` } })
+    );
+    return res.json(result.data);
   } catch (e) {
     console.error('Profile error:', e.message);
-    res.status(e.status || 500).json({ error: 'Failed to fetch profile', spotifyError: e.spotifyMessage || null });
+    const status = e.response?.status || e.status || 500;
+    res.status(status).json({ error: 'Failed to fetch profile', spotifyError: e.response?.data?.error?.message || e.spotifyMessage || null });
   }
 });
 
@@ -1125,13 +1159,10 @@ app.get('/api/spotify/top-tracks', verifyJWT, [
 ], validationHandler, async (req, res) => {
   const { time_range = 'short_term', limit = 20 } = req.query;
   try {
-    const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId, req);
-    if (!accessToken) {
-      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
-    }
-    const r = await axios.get('https://api.spotify.com/v1/me/top/tracks', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
-    return res.json(r.data);
+    const result = await callSpotifyWithRetry(req.userId, req, (token) =>
+      axios.get('https://api.spotify.com/v1/me/top/tracks', { headers: { Authorization: `Bearer ${token}` }, params: { time_range, limit } })
+    );
+    return res.json(result.data);
   } catch (e) {
     console.error('Spotify top tracks error:', e.message);
     const status = e.response?.status || e.status || 500;
@@ -1145,13 +1176,10 @@ app.get('/api/spotify/top-artists', verifyJWT, [
 ], validationHandler, async (req, res) => {
   const { time_range = 'medium_term', limit = 20 } = req.query;
   try {
-    const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId, req);
-    if (!accessToken) {
-      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
-    }
-    const r = await axios.get('https://api.spotify.com/v1/me/top/artists', { headers: { Authorization: `Bearer ${accessToken}` }, params: { time_range, limit } });
-    return res.json(r.data);
+    const result = await callSpotifyWithRetry(req.userId, req, (token) =>
+      axios.get('https://api.spotify.com/v1/me/top/artists', { headers: { Authorization: `Bearer ${token}` }, params: { time_range, limit } })
+    );
+    return res.json(result.data);
   } catch (e) {
     console.error('Spotify top artists error:', e.message);
     const status = e.response?.status || e.status || 500;
@@ -1164,13 +1192,10 @@ app.get('/api/spotify/recently-played', verifyJWT, [
 ], validationHandler, async (req, res) => {
   const { limit = 50 } = req.query;
   try {
-    const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId, req);
-    if (!accessToken) {
-      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
-    }
-    const r = await axios.get('https://api.spotify.com/v1/me/player/recently-played', { headers: { Authorization: `Bearer ${accessToken}` }, params: { limit } });
-    return res.json(r.data);
+    const result = await callSpotifyWithRetry(req.userId, req, (token) =>
+      axios.get('https://api.spotify.com/v1/me/player/recently-played', { headers: { Authorization: `Bearer ${token}` }, params: { limit } })
+    );
+    return res.json(result.data);
   } catch (e) {
     console.error('Recently played error:', e.message);
     const status = e.response?.status || e.status || 500;
@@ -1183,13 +1208,10 @@ app.get('/api/spotify/audio-features', verifyJWT, [
 ], validationHandler, async (req, res) => {
   const { ids } = req.query;
   try {
-    const userId = req.userId;
-    const accessToken = await getAccessTokenForUser(userId, req);
-    if (!accessToken) {
-      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
-    }
-    const r = await axios.get('https://api.spotify.com/v1/audio-features', { headers: { Authorization: `Bearer ${accessToken}` }, params: { ids } });
-    return res.json(r.data);
+    const result = await callSpotifyWithRetry(req.userId, req, (token) =>
+      axios.get('https://api.spotify.com/v1/audio-features', { headers: { Authorization: `Bearer ${token}` }, params: { ids } })
+    );
+    return res.json(result.data);
   } catch (e) {
     console.error('Spotify audio features error:', e.message);
     const status = e.response?.status || e.status || 500;
