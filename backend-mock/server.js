@@ -1,4 +1,4 @@
-// HarmonyTrack Mock Backend - Node.js (for local development without Docker)
+// HarmonyTrack Backend - Node.js (Express server for Vercel deployment)
 // This simulates all API endpoints for testing the frontend
 
 // Load local .env into process.env (if present)
@@ -271,50 +271,13 @@ function validateAudioFeaturesIds(req, res, next) {
   next();
 }
 
-// Mock data
-let moodEntries = [
-  { id: 1, date: '2024-02-01', happiness: 0.75, energy: 0.65, calmness: 0.8, danceability: 0.6, created_at: '2024-02-01T10:00:00Z' },
-  { id: 2, date: '2024-02-02', happiness: 0.78, energy: 0.68, calmness: 0.82, danceability: 0.65, created_at: '2024-02-02T14:30:00Z' },
-  { id: 3, date: '2024-02-03', happiness: 0.72, energy: 0.62, calmness: 0.78, danceability: 0.55, created_at: '2024-02-03T09:15:00Z' },
-  { id: 4, date: '2024-02-04', happiness: 0.8, energy: 0.7, calmness: 0.85, danceability: 0.7, created_at: '2024-02-04T16:45:00Z' },
-  { id: 5, date: '2024-02-05', happiness: 0.76, energy: 0.64, calmness: 0.81, danceability: 0.62, created_at: '2024-02-05T11:20:00Z' },
-  { id: 6, date: '2024-02-06', happiness: 0.74, energy: 0.61, calmness: 0.79, danceability: 0.58, created_at: '2024-02-06T13:00:00Z' },
-  { id: 7, date: '2024-02-07', happiness: 0.79, energy: 0.69, calmness: 0.83, danceability: 0.68, created_at: '2024-02-07T15:30:00Z' },
-];
+// In-memory data (resets on cold start — real persistence would use a DB)
+let moodEntries = [];
 
-let users = {
-  'user_123': {
-    id: 'user_123',
-    email: 'dev@harmonytrack.local',
-    name: 'Developer',
-    spotifyId: 'spotify_dev_123'
-  }
-};
-
-let recommendations = [
-  {
-    id: 1,
-    name: 'Chill Vibes Playlist',
-    tracks: [
-      { name: 'Song 1', artist: 'Artist A', spotifyId: 'track_1' },
-      { name: 'Song 2', artist: 'Artist B', spotifyId: 'track_2' },
-      { name: 'Song 3', artist: 'Artist C', spotifyId: 'track_3' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Energy Boost Mix',
-    tracks: [
-      { name: 'Song 4', artist: 'Artist D', spotifyId: 'track_4' },
-      { name: 'Song 5', artist: 'Artist E', spotifyId: 'track_5' },
-    ]
-  }
-];
-
-// Mock JWT generation
-function generateMockJWT(userId) {
+// JWT generation for local testing
+function generateTestJWT(userId) {
   return jwt.sign(
-    { user_id: userId, email: users[userId]?.email },
+    { user_id: userId },
     JWT_SECRET,
     { expiresIn: '24h' }
   );
@@ -739,38 +702,6 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
-// Legacy endpoint for demo login
-app.post('/api/auth/spotify', (req, res) => {
-  const userId = 'user_' + Date.now();
-  const token = jwt.sign(
-    { user_id: userId, email: 'demo@harmonytrack.local' },
-    JWT_SECRET,
-    { expiresIn: '24h' }
-  );
-  const mockRefresh = 'mock_refresh_' + Date.now();
-  try { setRefreshCookie(res, mockRefresh); } catch (e) {}
-  res.json({
-    token,
-    user: {
-      id: userId,
-      email: 'demo@harmonytrack.local',
-      name: 'Demo User',
-      spotifyId: 'demo_user',
-      image: 'https://via.placeholder.com/48'
-    }
-  });
-});
-
-app.get('/api/auth/callback', (req, res) => {
-  const token = jwt.sign(
-    { user_id: 'user_123', email: 'dev@harmonytrack.local' },
-    JWT_SECRET,
-    { expiresIn: '24h' }
-  );
-  try { setRefreshCookie(res, 'mock_refresh_dev'); } catch (e) {}
-  res.json({ token });
-});
-
 app.post('/api/auth/logout', (req, res) => {
   try { res.clearCookie(REFRESH_COOKIE_NAME, { path: '/' }); } catch (e) {}
   res.json({ success: true });
@@ -892,24 +823,36 @@ app.get('/api/mood/trends', verifyJWT, [
 ], validationHandler, (req, res) => {
   const { period = 'weekly', count = 8 } = req.query;
 
-  // Generate mock trend data
+  // Aggregate stored mood entries into trend periods
   const trends = [];
   const now = new Date();
 
   for (let i = count - 1; i >= 0; i--) {
-    const date = new Date(now);
+    const periodEnd = new Date(now);
+    const periodStart = new Date(now);
     if (period === 'weekly') {
-      date.setDate(date.getDate() - i * 7);
+      periodEnd.setDate(periodEnd.getDate() - i * 7);
+      periodStart.setDate(periodStart.getDate() - (i + 1) * 7);
     } else if (period === 'monthly') {
-      date.setMonth(date.getMonth() - i);
+      periodEnd.setMonth(periodEnd.getMonth() - i);
+      periodStart.setMonth(periodStart.getMonth() - (i + 1));
     }
 
-    trends.push({
-      date: date.toISOString().split('T')[0],
-      happiness: 0.7 + Math.random() * 0.25,
-      energy: 0.6 + Math.random() * 0.3,
-      calmness: 0.75 + Math.random() * 0.2
-    });
+    const startStr = periodStart.toISOString().split('T')[0];
+    const endStr = periodEnd.toISOString().split('T')[0];
+    const periodEntries = moodEntries.filter(e => e.date >= startStr && e.date <= endStr);
+
+    if (periodEntries.length > 0) {
+      const avg = (arr, key) => arr.reduce((s, e) => s + e[key], 0) / arr.length;
+      trends.push({
+        date: endStr,
+        happiness: parseFloat(avg(periodEntries, 'happiness').toFixed(2)),
+        energy: parseFloat(avg(periodEntries, 'energy').toFixed(2)),
+        calmness: parseFloat(avg(periodEntries, 'calmness').toFixed(2))
+      });
+    } else {
+      trends.push({ date: endStr, happiness: 0, energy: 0, calmness: 0 });
+    }
   }
 
   res.json(trends);
@@ -918,20 +861,36 @@ app.get('/api/mood/trends', verifyJWT, [
 app.get('/api/mood/insights', verifyJWT, (req, res) => {
   const days = req.query.days || 30;
 
-  // Calculate statistics from mock data
+  // Calculate statistics from stored entries
   const happiness_values = moodEntries.map(e => e.happiness);
-  const avg_happiness = happiness_values.length > 0
-    ? happiness_values.reduce((a, b) => a + b) / happiness_values.length
-    : 0.7;
+  const energy_values = moodEntries.map(e => e.energy);
+  const calmness_values = moodEntries.map(e => e.calmness);
+
+  const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b) / arr.length : 0;
+
+  if (moodEntries.length === 0) {
+    return res.json({
+      avg_happiness: 0,
+      avg_energy: 0,
+      avg_calmness: 0,
+      max_happiness: 0,
+      min_happiness: 0,
+      days_tracked: 0,
+      happiness_variance: 0
+    });
+  }
+
+  const avgH = avg(happiness_values);
+  const variance = happiness_values.reduce((sum, v) => sum + Math.pow(v - avgH, 2), 0) / happiness_values.length;
 
   res.json({
-    avg_happiness: parseFloat(avg_happiness.toFixed(2)),
-    avg_energy: 0.65,
-    avg_calmness: 0.81,
-    max_happiness: 0.95,
-    min_happiness: 0.5,
+    avg_happiness: parseFloat(avgH.toFixed(2)),
+    avg_energy: parseFloat(avg(energy_values).toFixed(2)),
+    avg_calmness: parseFloat(avg(calmness_values).toFixed(2)),
+    max_happiness: parseFloat(Math.max(...happiness_values).toFixed(2)),
+    min_happiness: parseFloat(Math.min(...happiness_values).toFixed(2)),
     days_tracked: moodEntries.length,
-    happiness_variance: 0.025
+    happiness_variance: parseFloat(variance.toFixed(4))
   });
 });
 
@@ -980,14 +939,6 @@ const createPlaylistRecommendation = (mood, playlistId) => {
   const playlistNameOptions = playlistNames[moodCategory] || playlistNames.calm;
   const selectedName = playlistNameOptions[Math.floor(Math.random() * playlistNameOptions.length)];
 
-  const mockTracks = [
-    { name: `Mood-Matched Track 1`, artist: `Artist A`, album: `Album 1` },
-    { name: `Mood-Matched Track 2`, artist: `Artist B`, album: `Album 2` },
-    { name: `Mood-Matched Track 3`, artist: `Artist C`, album: `Album 3` },
-    { name: `Mood-Matched Track 4`, artist: `Artist D`, album: `Album 4` },
-    { name: `Mood-Matched Track 5`, artist: `Artist E`, album: `Album 5` }
-  ];
-
   return {
     id: playlistId,
     name: selectedName,
@@ -1001,13 +952,7 @@ const createPlaylistRecommendation = (mood, playlistId) => {
     },
     genres: genreMap[moodCategory],
     confidence: 0.82 + Math.random() * 0.18,
-    tracks: mockTracks.map((t, i) => ({
-      id: `${playlistId}_track_${i}`,
-      name: t.name,
-      artist: t.artist,
-      album: t.album,
-      uri: `spotify:track:${playlistId}_${i}`
-    }))
+    tracks: []
   };
 };
 
@@ -1300,13 +1245,13 @@ module.exports = app;
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`\n${'='.repeat(50)}`);
-    console.log('🎵 HarmonyTrack Mock Backend');
+    console.log('🎵 HarmonyTrack Backend');
     console.log(`${'='.repeat(50)}`);
     console.log(`\n✓ Server running on http://localhost:${PORT}`);
     console.log(`✓ Health check: http://localhost:${PORT}/health`);
-    console.log(`\n📊 Mock Endpoints Available:`);
-    console.log('  POST   /api/auth/spotify');
-    console.log('  GET    /api/auth/callback');
+    console.log(`\n📊 Endpoints Available:`);
+    console.log('  POST   /api/auth/exchange');
+    console.log('  POST   /api/auth/refresh');
     console.log('  POST   /api/auth/logout');
     console.log('  POST   /api/mood');
     console.log('  GET    /api/mood');
@@ -1316,9 +1261,9 @@ if (require.main === module) {
     console.log('  GET    /api/mood/insights?days=30');
     console.log('  GET    /api/recommendations');
     console.log('  GET    /api/user');
-    console.log('\n🔐 JWT Token for testing:');
+    console.log('\n🔐 Test JWT Token:');
 
-    const testToken = generateMockJWT('user_123');
+    const testToken = generateTestJWT('test_user');
     console.log(`  ${testToken}`);
     console.log('\n💡 Use this token in Authorization header:');
     console.log('  Authorization: Bearer [token]');

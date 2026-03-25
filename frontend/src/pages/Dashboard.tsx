@@ -285,7 +285,8 @@ const Dashboard: React.FC = () => {
         <div ref={headerRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '36px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {profile ? (
-              <img src={pickImageUrlFromArray(profile.images) || '/avatar-placeholder.png'} alt={profile.display_name} style={{ width: '52px', height: '52px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.1)', objectFit: 'cover' }} />
+              <img src={pickImageUrlFromArray(profile.images) || ''} alt={profile.display_name} style={{ width: '52px', height: '52px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.1)', objectFit: 'cover', background: 'linear-gradient(135deg, #FF6B6B, #9B8FFF)' }}
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             ) : (
               <div style={{ width: '52px', height: '52px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.1)', background: 'linear-gradient(135deg, #FF6B6B, #9B8FFF)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -465,9 +466,10 @@ const Dashboard: React.FC = () => {
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                     <span style={{ color: '#555', fontSize: '12px', width: '18px', textAlign: 'right', fontWeight: 600 }}>{i + 1}</span>
                     <img
-                      src={pickImageUrlFromArray(track.album?.images) || '/placeholder.png'}
+                      src={pickImageUrlFromArray(track.album?.images) || ''}
                       alt={track.name}
-                      style={{ width: '40px', height: '40px', borderRadius: '6px' }}
+                      style={{ width: '40px', height: '40px', borderRadius: '6px', background: '#2a2a2e' }}
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, color: '#fff', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</p>
@@ -492,7 +494,8 @@ const Dashboard: React.FC = () => {
                       onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'}
                       onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                       <span style={{ color: '#555', fontSize: '12px', width: '18px', textAlign: 'right', fontWeight: 600 }}>{i + 1}</span>
-                      <img src={pickImageUrlFromArray(artist.images) || '/avatar-placeholder.png'} alt={artist.name} style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                      <img src={pickImageUrlFromArray(artist.images) || ''} alt={artist.name} style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#2a2a2e' }}
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ margin: 0, color: '#fff', fontSize: '13px', fontWeight: 500 }}>{artist.name}</p>
                         <p style={{ margin: 0, color: '#666', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{(artist.genres || []).slice(0, 3).join(', ')}</p>

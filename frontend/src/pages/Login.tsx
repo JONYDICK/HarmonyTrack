@@ -99,22 +99,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, externalError }) => {
     }
   };
 
-  const handleDemoLogin = () => {
-    if (isEnabled) playSound('click');
-    
-    const demoToken = 'demo_token_' + Date.now();
-    localStorage.setItem('harmonytrack_token', demoToken);
-    localStorage.setItem('harmonytrack_user', JSON.stringify({
-      id: 'demo_user',
-      email: 'demo@harmonytrack.local',
-      name: 'Demo User'
-    }));
-    
-    if (isEnabled) playSound('success');
-    onLoginSuccess();
-    window.location.href = '/';
-  };
-
   return (
     <div 
       ref={containerRef}
@@ -266,45 +250,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, externalError }) => {
         >
           {loading ? 'Connecting...' : 'Connect with Spotify'}
         </button>
-
-        {/* Divider */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '8px 0' }}>
-          <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
-          <span style={{ color: '#666', fontSize: '12px' }}>or</span>
-          <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
-        </div>
-
-        {/* Demo Button */}
-        <button
-          onClick={handleDemoLogin}
-          style={{
-            width: '100%',
-            background: 'linear-gradient(135deg, #3a3a3e 0%, #2a2a2e 100%)',
-            color: '#fff',
-            padding: '14px',
-            fontSize: '14px',
-            fontWeight: '600',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: '10px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'linear-gradient(135deg, #4a4a4e 0%, #3a3a3e 100%)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'linear-gradient(135deg, #3a3a3e 0%, #2a2a2e 100%)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
-        >
-          🎵 Try Demo Mode
-        </button>
-        <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#666', textAlign: 'center' }}>
-          No Spotify account needed — explore with sample data
-        </p>
 
         {/* Privacy info */}
         <div style={{ 
