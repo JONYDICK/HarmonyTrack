@@ -83,12 +83,6 @@ const Dashboard: React.FC = () => {
 
   // ── Fetch ALL Spotify data ─────
   useEffect(() => {
-    // Load cached profile from localStorage if present (helps when switching modes)
-    try {
-      const cached = localStorage.getItem('harmonytrack_profile');
-      if (cached) setProfile(JSON.parse(cached));
-    } catch (e) { /* ignore */ }
-
     // Check if auth completed with a 403 warning (Spotify Dev Mode issue)
     const authWarning = localStorage.getItem('harmonytrack_warning');
     if (authWarning === 'spotify_403') {

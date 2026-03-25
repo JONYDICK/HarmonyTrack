@@ -40,6 +40,8 @@ export default function App() {
 
     if (tokenFromUrl) {
       localStorage.setItem('harmonytrack_token', tokenFromUrl);
+      // Clear old cached data so stale/mock info doesn't persist
+      localStorage.removeItem('harmonytrack_profile');
       // Check for warning (e.g. spotify_403)
       const warning = params.get('warning');
       if (warning) {
