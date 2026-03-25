@@ -77,6 +77,7 @@ const Dashboard: React.FC = () => {
   const [recentlyPlayed, setRecentlyPlayed] = useState<RecentItem[]>([]);
   const [audioFeatures, setAudioFeatures] = useState<AudioFeature[]>([]);
   const [moodData, setMoodData] = useState<MoodData>({ happiness: 0.5, energy: 0.5, calmness: 0.5, danceability: 0.5 });
+  const [moodFromRealData, setMoodFromRealData] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'evolution' | 'patterns'>('overview');
 
   const { playSound, isEnabled } = useAudioFeedback();
@@ -168,6 +169,7 @@ const Dashboard: React.FC = () => {
                 calmness: avg(features.map((f: AudioFeature) => f.acousticness)),
                 danceability: avg(features.map((f: AudioFeature) => f.danceability)),
               });
+              setMoodFromRealData(true);
             }
           } catch (afErr) {
             console.warn('Audio features unavailable:', afErr);
@@ -175,6 +177,14 @@ const Dashboard: React.FC = () => {
         }
 
         const allFailed = [profileRes, topShortRes, recentRes].every(r => r.status === 'rejected');
+        const failedEndpoints = [
+          profileRes.status === 'rejected' ? 'Profile' : null,
+          topShortRes.status === 'rejected' ? 'Top Tracks' : null,
+          topLongRes.status === 'rejected' ? 'All-Time Tracks' : null,
+          artistsRes.status === 'rejected' ? 'Top Artists' : null,
+          recentRes.status === 'rejected' ? 'Recently Played' : null,
+        ].filter(Boolean);
+
         if (allFailed) {
           console.warn('[Dashboard] All Spotify API calls failed');
           const firstRejected = [profileRes, topShortRes, recentRes].find(r => r.status === 'rejected');
@@ -187,6 +197,9 @@ const Dashboard: React.FC = () => {
           } else {
             setError('Could not load Spotify data. Try logging out and reconnecting.');
           }
+        } else if (failedEndpoints.length > 0) {
+          console.warn('[Dashboard] Some Spotify endpoints failed:', failedEndpoints);
+          setError(`Some data couldn't load: ${failedEndpoints.join(', ')}. Try logging out and reconnecting with Spotify.`);
         }
       } catch (e: any) {
         setError(e.message || 'Failed to load data');
@@ -399,7 +412,9 @@ const Dashboard: React.FC = () => {
                   ))}
                 </div>
                 <p style={{ margin: '16px 0 0', color: '#555', textAlign: 'center', fontSize: '11px' }}>
-                  Calculated from audio features of your {recentlyPlayed.length} recently played tracks
+                  {moodFromRealData
+                    ? `Calculated from audio features of your ${recentlyPlayed.length} recently played tracks`
+                    : 'Audio features unavailable — mood shows defaults. Try logging out and back in.'}
                 </p>
               </div>
 
