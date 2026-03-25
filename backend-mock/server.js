@@ -294,6 +294,9 @@ function verifyJWT(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.user_id;
+    req.userEmail = decoded.email;
+    req.userName = decoded.name;
+    req.spotifyId = decoded.spotify_id;
     // Pass Spotify tokens from JWT for serverless environments
     if (decoded.spotify_access_token) {
       req.spotifyAccessToken = decoded.spotify_access_token;
@@ -1166,17 +1169,26 @@ app.get('/api/spotify/audio-features', verifyJWT, [
 
 // ============ USER ENDPOINTS ============
 
+// Return user info from the JWT payload (no in-memory store needed)
 app.get('/api/user', verifyJWT, (req, res) => {
-  res.json(users['user_123'] || { id: 'user_123', name: 'Developer' });
+  res.json({
+    id: req.userId,
+    email: req.userEmail || null,
+    name: req.userName || null,
+    spotifyId: req.spotifyId || null
+  });
 });
 
 app.put('/api/user', verifyJWT, [
   body('name').optional().isString().isLength({ max: 100 }).trim().escape(),
   body('email').optional().isEmail().normalizeEmail()
 ], validationHandler, (req, res) => {
-  const { name, email } = req.body;
-  users['user_123'] = { ...users['user_123'], name, email };
-  res.json(users['user_123']);
+  // Without a database, updates are ephemeral; return what was sent
+  res.json({
+    id: req.userId,
+    name: req.body.name || req.userName || null,
+    email: req.body.email || req.userEmail || null
+  });
 });
 
 // ============ HEALTH CHECK ============
