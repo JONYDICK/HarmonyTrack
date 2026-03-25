@@ -106,6 +106,11 @@ export const spotifyAuthService = {
 };
 
 export const spotifyService = {
+  // Single aggregate endpoint — fetches all dashboard data in one request
+  // to avoid serverless race conditions with parallel token refreshes
+  getAllData: () => api.get('/api/spotify/all'),
+
+  // Individual endpoints (kept for backward compatibility)
   getProfile: () => api.get('/api/spotify/profile'),
   getTopTracks: (timeRange = 'short_term', limit = 20) =>
     api.get(`/api/spotify/top-tracks?time_range=${timeRange}&limit=${limit}`),

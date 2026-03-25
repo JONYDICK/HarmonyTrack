@@ -1088,6 +1088,102 @@ async function spotifyAPI(spotifyToken, url) {
   }
 }
 
+// ============ AGGREGATE SPOTIFY ENDPOINT ============
+// Fetches ALL dashboard data in a single Lambda invocation to avoid
+// race conditions when multiple parallel requests each try to refresh
+// the Spotify token on separate serverless instances.
+app.get('/api/spotify/all', verifyJWT, async (req, res) => {
+  try {
+    // Phase 1: Get a single valid access token (refresh once if needed)
+    const accessToken = await getAccessTokenForUser(req.userId, req);
+    if (!accessToken) {
+      return res.status(401).json({ error: 'No Spotify access token available. Please log in again.' });
+    }
+    const headers = { Authorization: `Bearer ${accessToken}` };
+
+    // Phase 2: Fetch all Spotify data in parallel within this single invocation
+    const [profileRes, topShortRes, topLongRes, artistsRes, recentRes] = await Promise.allSettled([
+      axios.get('https://api.spotify.com/v1/me', { headers }),
+      axios.get('https://api.spotify.com/v1/me/top/tracks', { headers, params: { time_range: 'short_term', limit: 20 } }),
+      axios.get('https://api.spotify.com/v1/me/top/tracks', { headers, params: { time_range: 'long_term', limit: 20 } }),
+      axios.get('https://api.spotify.com/v1/me/top/artists', { headers, params: { time_range: 'medium_term', limit: 20 } }),
+      axios.get('https://api.spotify.com/v1/me/player/recently-played', { headers, params: { limit: 50 } }),
+    ]);
+
+    // If ALL failed with 401, try refreshing the token and retrying once
+    const allUnauth = [profileRes, topShortRes, topLongRes, artistsRes, recentRes]
+      .every(r => r.status === 'rejected' && r.reason?.response?.status === 401);
+    if (allUnauth) {
+      console.log(`[Spotify/all] All 401 — forcing token refresh for ${req.userId}`);
+      const stored = global.userTokens[req.userId];
+      if (stored) stored.expiresAt = 0;
+      delete refreshLocks[req.userId];
+      const newToken = await getAccessTokenForUser(req.userId, req);
+      if (newToken && newToken !== accessToken) {
+        const h2 = { Authorization: `Bearer ${newToken}` };
+        const [p2, ts2, tl2, a2, r2] = await Promise.allSettled([
+          axios.get('https://api.spotify.com/v1/me', { headers: h2 }),
+          axios.get('https://api.spotify.com/v1/me/top/tracks', { headers: h2, params: { time_range: 'short_term', limit: 20 } }),
+          axios.get('https://api.spotify.com/v1/me/top/tracks', { headers: h2, params: { time_range: 'long_term', limit: 20 } }),
+          axios.get('https://api.spotify.com/v1/me/top/artists', { headers: h2, params: { time_range: 'medium_term', limit: 20 } }),
+          axios.get('https://api.spotify.com/v1/me/player/recently-played', { headers: h2, params: { limit: 50 } }),
+        ]);
+        return buildAllResponse(res, p2, ts2, tl2, a2, r2, newToken);
+      }
+    }
+
+    return buildAllResponse(res, profileRes, topShortRes, topLongRes, artistsRes, recentRes, accessToken);
+  } catch (e) {
+    console.error('[Spotify/all] Error:', e.message);
+    const status = e.response?.status || e.status || 500;
+    res.status(status).json({ error: 'Failed to fetch Spotify data', message: e.message });
+  }
+});
+
+// Helper: build the /api/spotify/all response and optionally fetch audio features
+async function buildAllResponse(res, profileRes, topShortRes, topLongRes, artistsRes, recentRes, accessToken) {
+  const recentData = recentRes.status === 'fulfilled' ? recentRes.value.data : null;
+
+  // Phase 3: Fetch audio features for recently played tracks (needs track IDs from phase 2)
+  let audioFeatures = null;
+  if (recentData?.items?.length > 0) {
+    const trackIds = [...new Set(recentData.items.map(i => i.track?.id).filter(Boolean))].slice(0, 50);
+    if (trackIds.length > 0) {
+      try {
+        const afRes = await axios.get('https://api.spotify.com/v1/audio-features', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          params: { ids: trackIds.join(',') }
+        });
+        audioFeatures = afRes.data;
+      } catch (afErr) {
+        console.warn('[Spotify/all] Audio features failed:', afErr.response?.status || afErr.message);
+      }
+    }
+  }
+
+  // Log failures for debugging
+  const failures = [];
+  if (profileRes.status === 'rejected') failures.push('profile:' + (profileRes.reason?.response?.status || profileRes.reason?.message));
+  if (topShortRes.status === 'rejected') failures.push('topShort:' + (topShortRes.reason?.response?.status || topShortRes.reason?.message));
+  if (topLongRes.status === 'rejected') failures.push('topLong:' + (topLongRes.reason?.response?.status || topLongRes.reason?.message));
+  if (artistsRes.status === 'rejected') failures.push('artists:' + (artistsRes.reason?.response?.status || artistsRes.reason?.message));
+  if (recentRes.status === 'rejected') failures.push('recent:' + (recentRes.reason?.response?.status || recentRes.reason?.message));
+  if (failures.length > 0) console.warn('[Spotify/all] Partial failures:', failures.join(', '));
+
+  res.json({
+    profile: profileRes.status === 'fulfilled' ? profileRes.value.data : null,
+    topTracks: topShortRes.status === 'fulfilled' ? topShortRes.value.data : null,
+    topTracksLong: topLongRes.status === 'fulfilled' ? topLongRes.value.data : null,
+    topArtists: artistsRes.status === 'fulfilled' ? artistsRes.value.data : null,
+    recentlyPlayed: recentRes.status === 'fulfilled' ? recentRes.value.data : null,
+    audioFeatures,
+    _failures: failures.length > 0 ? failures : undefined,
+  });
+}
+
+// ============ INDIVIDUAL SPOTIFY PROXY ENDPOINTS ============
+// (Kept for backward compatibility, but the frontend should prefer /api/spotify/all)
+
 app.get('/api/spotify/profile', verifyJWT, async (req, res) => {
   try {
     const result = await callSpotifyWithRetry(req.userId, req, (token) =>

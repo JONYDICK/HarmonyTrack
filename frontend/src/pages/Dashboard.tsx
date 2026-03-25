@@ -98,111 +98,61 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [profileRes, topShortRes, topLongRes, artistsRes, recentRes] = await Promise.allSettled([
-          spotifyService.getProfile(),
-          spotifyService.getTopTracks('short_term', 20),
-          spotifyService.getTopTracks('long_term', 20),
-          spotifyService.getTopArtists('medium_term', 20),
-          spotifyService.getRecentlyPlayed(50),
-        ]);
+        // Single API call fetches all Spotify data in one Lambda invocation
+        // This eliminates the race condition where parallel requests each
+        // try to refresh the Spotify token on separate serverless instances.
+        const res = await spotifyService.getAllData();
+        const data = res.data;
 
-        if (profileRes.status === 'fulfilled') {
-          setProfile(profileRes.value.data);
-        } else {
-          console.warn('[Dashboard] Profile failed:', profileRes.reason?.message);
-        }
+        if (data.profile) setProfile(data.profile);
+        
+        const shortTracks: SpotifyTrack[] = data.topTracks?.items || [];
+        setTopTracks(shortTracks);
+        setTopTracksLong(data.topTracksLong?.items || []);
+        setTopArtists(data.topArtists?.items || []);
 
-        let shortTracks: SpotifyTrack[] = [];
-        if (topShortRes.status === 'fulfilled') {
-          shortTracks = topShortRes.value.data.items || [];
-          setTopTracks(shortTracks);
-        } else {
-          console.warn('[Dashboard] Top tracks (short) failed:', topShortRes.reason?.message);
-        }
-        if (topLongRes.status === 'fulfilled') {
-          setTopTracksLong(topLongRes.value.data.items || []);
-        } else {
-          console.warn('[Dashboard] Top tracks (long) failed:', topLongRes.reason?.message);
-        }
-        if (artistsRes.status === 'fulfilled') {
-          setTopArtists(artistsRes.value.data.items || []);
-        } else {
-          console.warn('[Dashboard] Top artists failed:', artistsRes.reason?.message);
-        }
+        const recentItems: RecentItem[] = data.recentlyPlayed?.items || [];
+        setRecentlyPlayed(recentItems);
 
-        let recentItems: RecentItem[] = [];
-        if (recentRes.status === 'fulfilled') {
-          recentItems = recentRes.value.data.items || [];
-          setRecentlyPlayed(recentItems);
-        } else {
-          console.warn('[Dashboard] Recently played failed:', recentRes.reason?.message);
-        }
-
-        // Diagnostics: identify tracks missing album/images to explain render crash
-        if (shortTracks.length > 0) {
-          const missingAlbum = shortTracks.filter(t => !t.album);
-          const missingImages = shortTracks.filter(t => !t.album?.images || t.album.images.length === 0);
-          if (missingAlbum.length > 0 || missingImages.length > 0) {
-            console.warn('[Dashboard] Top tracks missing album/images', {
-              total: shortTracks.length,
-              missingAlbum: missingAlbum.length,
-              missingImages: missingImages.length,
-              sampleMissingAlbum: missingAlbum[0],
-              sampleMissingImages: missingImages[0],
+        // Audio features are fetched server-side in the aggregate endpoint
+        if (data.audioFeatures) {
+          const features = (data.audioFeatures.audio_features || []).filter(Boolean);
+          setAudioFeatures(features);
+          if (features.length > 0) {
+            const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+            setMoodData({
+              happiness: avg(features.map((f: AudioFeature) => f.valence)),
+              energy: avg(features.map((f: AudioFeature) => f.energy)),
+              calmness: avg(features.map((f: AudioFeature) => f.acousticness)),
+              danceability: avg(features.map((f: AudioFeature) => f.danceability)),
             });
+            setMoodFromRealData(true);
           }
         }
 
-        // Fetch audio features for recent tracks to derive REAL mood
-        const trackIds = recentItems.map(r => r.track.id).filter(Boolean);
-        const uniqueIds = [...new Set(trackIds)].slice(0, 50);
-        if (uniqueIds.length > 0) {
-          try {
-            const afRes = await spotifyService.getAudioFeatures(uniqueIds);
-            const features = (afRes.data.audio_features || []).filter(Boolean);
-            setAudioFeatures(features);
-            if (features.length > 0) {
-              const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
-              setMoodData({
-                happiness: avg(features.map((f: AudioFeature) => f.valence)),
-                energy: avg(features.map((f: AudioFeature) => f.energy)),
-                calmness: avg(features.map((f: AudioFeature) => f.acousticness)),
-                danceability: avg(features.map((f: AudioFeature) => f.danceability)),
-              });
-              setMoodFromRealData(true);
-            }
-          } catch (afErr) {
-            console.warn('Audio features unavailable:', afErr);
-          }
-        }
-
-        const allFailed = [profileRes, topShortRes, recentRes].every(r => r.status === 'rejected');
-        const failedEndpoints = [
-          profileRes.status === 'rejected' ? 'Profile' : null,
-          topShortRes.status === 'rejected' ? 'Top Tracks' : null,
-          topLongRes.status === 'rejected' ? 'All-Time Tracks' : null,
-          artistsRes.status === 'rejected' ? 'Top Artists' : null,
-          recentRes.status === 'rejected' ? 'Recently Played' : null,
-        ].filter(Boolean);
+        // Check for failures reported by the aggregate endpoint
+        const failures: string[] = data._failures || [];
+        const hasProfile = !!data.profile;
+        const hasTopTracks = !!data.topTracks;
+        const hasRecent = !!data.recentlyPlayed;
+        const allFailed = !hasProfile && !hasTopTracks && !hasRecent;
 
         if (allFailed) {
-          console.warn('[Dashboard] All Spotify API calls failed');
-          const firstRejected = [profileRes, topShortRes, recentRes].find(r => r.status === 'rejected');
-          const resStatus = firstRejected?.status === 'rejected' ? firstRejected.reason?.response?.status : null;
-          const spotifyMsg = firstRejected?.status === 'rejected' ? firstRejected.reason?.response?.data?.spotifyError : null;
-          if (resStatus === 403) {
-            setError(`Spotify rejected the request (403). ${spotifyMsg || 'Your account may not be registered in the app. Go to developer.spotify.com/dashboard, your app, Settings, User Management and add your Spotify email.'}`);
-          } else if (resStatus === 401) {
-            setError('Your Spotify session has expired. Please log out and log in again.');
-          } else {
-            setError('Could not load Spotify data. Try logging out and reconnecting.');
-          }
-        } else if (failedEndpoints.length > 0) {
-          console.warn('[Dashboard] Some Spotify endpoints failed:', failedEndpoints);
-          setError(`Some data couldn't load: ${failedEndpoints.join(', ')}. Try logging out and reconnecting with Spotify.`);
+          console.warn('[Dashboard] All Spotify data empty from /api/spotify/all', failures);
+          setError('Could not load Spotify data. Try logging out and reconnecting.');
+        } else if (failures.length > 0) {
+          console.warn('[Dashboard] Some data missing:', failures);
+          setError(`Some data couldn't load. Try refreshing or logging out and reconnecting.`);
         }
       } catch (e: any) {
-        setError(e.message || 'Failed to load data');
+        const status = e.response?.status;
+        if (status === 403) {
+          setError('Spotify rejected the request (403). Your account may not be registered in the app.');
+        } else if (status === 401) {
+          setError('Your Spotify session has expired. Please log out and log in again.');
+        } else {
+          setError(e.message || 'Failed to load data');
+        }
       } finally {
         setLoading(false);
       }
